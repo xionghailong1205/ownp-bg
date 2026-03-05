@@ -1,0 +1,58 @@
+# ownp 在线小说平台 Docker Compose 配置文件
+# 包含 nginx 反向代理服务 和 PostgreSQL 数据库服务
+
+services:
+  # Nginx 反向代理服务
+  nginx:
+    image: nginx:latest
+    container_name: ownp_nginx
+    # 将宿主机 80 端口映射到容器 80 端口（HTTP）
+    # 将宿主机 443 端口映射到容器 443 端口（HTTPS）
+    ports:
+      - "80:80"
+      - "443:443"
+    # 挂载 nginx 配置文件目录和静态文件目录
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+    # 依赖 PostgreSQL 服务，确保数据库先启动
+    depends_on:
+      - postgres
+    # 容器退出后自动重启
+    restart: unless-stopped
+    networks:
+      - ownp_network
+
+  # PostgreSQL 数据库服务
+  postgres:
+    image: postgres:15
+    container_name: ownp_postgres
+    # 将宿主机 5432 端口映射到容器 5432 端口，允许外网访问数据库
+    # 注意：生产环境建议通过防火墙限制访问来源 IP，确保安全
+    ports:
+      - "5432:5432"
+    # 数据库环境变量配置
+    environment:
+      # 数据库超级用户名
+      POSTGRES_USER: ${POSTGRES_USER:-ownp}
+      # 数据库超级用户密码（必须在 .env 文件中设置强密码，请勿使用弱密码）
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 文件中设置 POSTGRES_PASSWORD}
+      # 默认数据库名称
+      POSTGRES_DB: ${POSTGRES_DB:-ownp_db}
+    # 持久化存储数据库数据，防止容器重启后数据丢失
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # 容器退出后自动重启
+    restart: unless-stopped
+    networks:
+      - ownp_network
+
+# 定义数据卷，用于持久化 PostgreSQL 数据
+volumes:
+  postgres_data:
+    driver: local
+
+# 定义内部网络，供容器间通信使用
+networks:
+  ownp_network:
+    driver: bridge
